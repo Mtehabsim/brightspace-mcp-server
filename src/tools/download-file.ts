@@ -105,6 +105,33 @@ export function registerDownloadFile(
 }
 
 /**
+ * Extract a filename from a Content-Disposition header.
+ */
+export function parseContentDispositionFilename(
+  disposition: string
+): string | null {
+  const extended = disposition.match(/filename\*\s*=\s*([^;]+)/i);
+  if (extended?.[1]) {
+    const value = extended[1].trim();
+    const parts = value.split("'");
+    const encoded = parts.length >= 3 ? parts.slice(2).join("'") : value;
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return encoded;
+    }
+  }
+
+  const plain = disposition.match(/filename\s*=\s*("([^"]*)"|[^;\n]*)/i);
+  if (plain) {
+    const value = (plain[2] ?? plain[1] ?? "").trim();
+    if (value) return value;
+  }
+
+  return null;
+}
+
+/**
  * Download a content file using topicId
  */
 async function downloadContentFile(
@@ -138,11 +165,7 @@ async function downloadContentFile(
 
   // Get filename from Content-Disposition header
   const disposition = response.headers.get("Content-Disposition") ?? "";
-  let filename = "download";
-  const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-  if (match?.[1]) {
-    filename = match[1].replace(/['"]/g, "");
-  }
+  const filename = parseContentDispositionFilename(disposition) ?? "download";
 
   log("DEBUG", `Content-Disposition filename: ${filename}`);
 

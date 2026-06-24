@@ -110,17 +110,28 @@ export async function validateFileType(
     return { mime: detected.mime, ext: detected.ext };
   }
 
-  // Fallback for text files that file-type can't detect
-  // Check if buffer looks like text (no null bytes, mostly printable chars)
-  const isText =
-    !buffer.includes(0) && buffer.toString("utf8", 0, 512).match(/^[\x20-\x7E\n\r\t]*$/);
+  // Fallback for text-based files with no magic-byte signature: accept if the
+  // buffer decodes as UTF-8 (rejecting binaries and NUL bytes), then sniff HTML.
+  if (!buffer.includes(0)) {
+    let decoded: string | null = null;
+    try {
+      decoded = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+    } catch {
+      // Invalid UTF-8 — treat as binary.
+    }
 
-  if (isText) {
-    // Allow common text MIME types
-    const textTypes = allowedTypes.filter((t) => t.startsWith("text/"));
-    if (textTypes.length > 0) {
-      // Default to text/plain for undetectable text files
-      return { mime: "text/plain", ext: "txt" };
+    if (decoded !== null) {
+      const noBom =
+        decoded.charCodeAt(0) === 0xfeff ? decoded.slice(1) : decoded;
+      const head = noBom.trimStart().toLowerCase();
+      const isHtml =
+        head.startsWith("<!doctype html") || head.startsWith("<html");
+      const mime = isHtml ? "text/html" : "text/plain";
+      const ext = isHtml ? "html" : "txt";
+
+      if (allowedTypes.includes(mime)) {
+        return { mime, ext };
+      }
     }
   }
 
