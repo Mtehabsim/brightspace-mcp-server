@@ -13,7 +13,15 @@ import { z } from "zod";
  */
 
 export const GetMyCoursesSchema = z.object({
-  activeOnly: z.boolean().default(true).describe("Only return currently active courses"),
+  // Intentionally has no default: omitting it falls back to the configured
+  // D2L_ACTIVE_ONLY / config.json policy (true unless the user changed it).
+  // A default here would silently override that configuration on every call.
+  activeOnly: z
+    .boolean()
+    .optional()
+    .describe(
+      "Only return currently active courses. Defaults to the server's configured activeOnly setting (true unless overridden)."
+    ),
 });
 
 export const GetUpcomingDueDatesSchema = z.object({

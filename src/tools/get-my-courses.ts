@@ -56,7 +56,14 @@ export function registerGetMyCourses(
         log("DEBUG", "get_my_courses tool called", { args });
 
         // Parse and validate input
-        const { activeOnly } = GetMyCoursesSchema.parse(args);
+        const { activeOnly: activeOnlyArg } = GetMyCoursesSchema.parse(args);
+
+        // An explicit per-call argument wins; otherwise fall back to the configured
+        // policy. Resolving once here keeps the API query and the post-fetch filter
+        // in agreement — previously the argument shaped the query but the filter
+        // still used config.courseFilter.activeOnly, so activeOnly:false fetched
+        // inactive courses and then discarded them.
+        const activeOnly = activeOnlyArg ?? config.courseFilter.activeOnly;
 
         // Build path - orgUnitTypeId=3 means "Course Offering" type
         const path = apiClient.lp(
@@ -87,7 +94,7 @@ export function registerGetMyCourses(
             isActive: item.Access.IsActive,
             lastAccessed: item.Access.LastAccessed,
           })),
-          config.courseFilter
+          { ...config.courseFilter, activeOnly }
         );
 
         log("INFO", `get_my_courses: Retrieved ${courses.length} courses`);
