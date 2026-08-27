@@ -479,8 +479,24 @@ export class BrowserAuth {
         timeout: 30000,
       });
 
-      const currentUrl = page.url();
+      let currentUrl = page.url();
       log("DEBUG", `Current URL after navigation: ${currentUrl}`);
+
+      // Some institutions (e.g. USC) bounce through an extra SAML hop such as
+      // /d2l/lp/auth/login/samlLogin.d2l before landing on /d2l/home, even when the
+      // restored cookies are still valid. `domcontentloaded` can resolve mid-chain,
+      // so re-check once the redirects settle. Without this we misread a live session
+      // as logged-out and start an SSO flow that waits for a login form that never
+      // renders — which throws before the caller can persist session.json.
+      if (!currentUrl.includes("/d2l/home")) {
+        try {
+          await page.waitForURL(/\/d2l\/home/, { timeout: 15000 });
+          log("DEBUG", "Redirect chain settled on /d2l/home");
+        } catch {
+          // Never landed on /d2l/home — a real login is required.
+        }
+        currentUrl = page.url();
+      }
 
       // If we were redirected away from /d2l/home, login is required
       const needsLogin = !currentUrl.includes("/d2l/home");
