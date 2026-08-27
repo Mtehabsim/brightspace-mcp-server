@@ -108,7 +108,7 @@ interface EnrollmentResponse {
 /**
  * Fetch assignments (dropbox + quizzes) for a single course
  */
-async function fetchCourseAssignments(
+export async function fetchCourseAssignments(
   apiClient: D2LApiClient,
   courseId: number
 ): Promise<any[]> {
@@ -151,19 +151,17 @@ async function fetchCourseAssignments(
         }
       }
 
-      // Fetch feedback if submissions exist
+      // Fetch feedback independently of submissions
       let feedback: DropboxFeedback | null = null;
-      if (submissions.length > 0) {
-        try {
-          feedback = await apiClient.get<DropboxFeedback>(
-            apiClient.le(courseId, `/dropbox/folders/${folder.Id}/feedback/myFeedback/`),
-            { ttl: DEFAULT_CACHE_TTLS.assignments }
-          );
-        } catch (error: any) {
-          // 404/403 means no feedback available - that's fine
-          if (error?.status !== 404 && error?.status !== 403) {
-            log("DEBUG", `Failed to fetch feedback for folder ${folder.Id}`, error);
-          }
+      try {
+        feedback = await apiClient.get<DropboxFeedback>(
+          apiClient.le(courseId, `/dropbox/folders/${folder.Id}/feedback/myFeedback/`),
+          { ttl: DEFAULT_CACHE_TTLS.assignments }
+        );
+      } catch (error: any) {
+        // 404/403 means no feedback available (or no access) - that's fine
+        if (error?.status !== 404 && error?.status !== 403) {
+          log("DEBUG", `Failed to fetch feedback for folder ${folder.Id}`, error);
         }
       }
 

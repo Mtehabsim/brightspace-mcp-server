@@ -17,8 +17,8 @@ import type { AppConfig } from "../types/index.js";
 interface NewsItem {
   Id: number;
   Title: string;
-  Body: { Text: string; Html: string };
-  CreatedBy: { Identifier: string; DisplayName: string };
+  Body: { Text: string; Html: string } | null;
+  CreatedBy: { Identifier: string; DisplayName: string } | null;
   CreatedDate: string;
   LastModifiedBy: { Identifier: string; DisplayName: string };
   LastModifiedDate: string;
@@ -48,6 +48,21 @@ interface EnrollmentResponse {
   PagingInfo?: {
     HasMoreItems: boolean;
     Bookmark?: string;
+  };
+}
+
+/**
+ * Map a raw D2L news item to a clean announcement object.
+ */
+export function mapNewsItem(item: NewsItem) {
+  return {
+    id: item.Id,
+    title: item.Title,
+    body: item.Body?.Text ?? "",
+    createdBy: item.CreatedBy?.DisplayName ?? "Unknown",
+    createdDate: item.CreatedDate,
+    startDate: item.StartDate,
+    isPinned: item.IsPinned,
   };
 }
 
@@ -83,15 +98,7 @@ export function registerGetAnnouncements(
 
           // Map to clean objects
           const announcements = newsItems
-            .map((item) => ({
-              id: item.Id,
-              title: item.Title,
-              body: item.Body.Text,
-              createdBy: item.CreatedBy.DisplayName,
-              createdDate: item.CreatedDate,
-              startDate: item.StartDate,
-              isPinned: item.IsPinned,
-            }))
+            .map(mapNewsItem)
             .sort(
               (a, b) =>
                 new Date(b.createdDate).getTime() -
@@ -138,13 +145,7 @@ export function registerGetAnnouncements(
               });
 
               return newsItems.map((newsItem) => ({
-                id: newsItem.Id,
-                title: newsItem.Title,
-                body: newsItem.Body.Text,
-                createdBy: newsItem.CreatedBy.DisplayName,
-                createdDate: newsItem.CreatedDate,
-                startDate: newsItem.StartDate,
-                isPinned: newsItem.IsPinned,
+                ...mapNewsItem(newsItem),
                 courseId: item.OrgUnit.Id,
                 courseName: item.OrgUnit.Name,
               }));
