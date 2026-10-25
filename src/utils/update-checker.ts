@@ -30,6 +30,17 @@ function isNpxCache(): boolean {
   return /[\\/]_npx[\\/][^\\/]+[\\/]node_modules[\\/]brightspace-mcp-server/.test(normalized);
 }
 
+/**
+ * True when the running copy lives inside a node_modules tree, i.e. it was put
+ * there by npm/npx. A git checkout launched directly from an MCP client config
+ * does not, and for those `npm install -g` would update a *different* copy than
+ * the one running — so we only report that an update exists.
+ */
+function isPackageInstall(): boolean {
+  const normalized = projectRoot.split(sep).join("/");
+  return /\/node_modules\/brightspace-mcp-server$/.test(normalized);
+}
+
 async function clearAllNpxCaches(): Promise<number> {
   const { homedir } = await import("node:os");
   const npxCacheRoot = resolve(homedir(), ".npm", "_npx");
@@ -59,6 +70,11 @@ const FALLBACK_MSG = (old: string, latest: string) =>
   `Update available: v${old} → v${latest}. ` +
   "Run `npx brightspace-mcp-server@latest` or clear your npx cache to update.";
 
+const SOURCE_MSG = (old: string, latest: string) =>
+  `Update available: v${old} \u2192 v${latest}. This server runs from a source checkout ` +
+  `at ${projectRoot}, so a global install would not change the running copy \u2014 ` +
+  "run `npm run update` there (git pull + npm install + npm run build), then restart your MCP client.";
+
 export function initUpdateChecker(): void {
   const installed = getInstalledVersion();
 
@@ -77,6 +93,10 @@ export function initUpdateChecker(): void {
         .catch(() => {
           notice = FALLBACK_MSG(installed, latest);
         });
+    } else if (!isPackageInstall()) {
+      // Source checkout: never mutate the user's global packages as a side
+      // effect of starting the server, and never claim an update was applied.
+      notice = SOURCE_MSG(installed, latest);
     } else {
       exec("npm install -g brightspace-mcp-server@latest", { timeout: 60000 }, (installErr) => {
         if (installErr) {
