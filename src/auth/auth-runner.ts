@@ -13,7 +13,13 @@ import { log } from "../utils/logger.js";
  * Timeout for the auth process. Generous because the user may need to
  * approve MFA on their phone or manually log in via the browser.
  */
-const AUTH_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+// Must exceed the auth flow's own budget, otherwise this timeout kills the
+// child mid-login and the manual path can never finish. BrowserAuth allows
+// 60s for the browser launch plus 300s to intercept the token when the user
+// logs in by hand (120s when credentials drive the SSO), so the inner budget
+// is up to 6 minutes. Killing Chrome partway is also what leaves the profile
+// crash-flagged, per the SIGTRAP notes in browser-auth.ts.
+const AUTH_TIMEOUT_MS = 6.5 * 60 * 1000; // 6.5 minutes
 
 /**
  * Launches the brightspace-auth CLI as a child process to
