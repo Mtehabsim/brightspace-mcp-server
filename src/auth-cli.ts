@@ -92,6 +92,18 @@ async function main(): Promise<void> {
   } catch (error) {
     console.error("\n=== Authentication failed ===");
     console.error("\nError:", error instanceof Error ? error.message : String(error));
+
+    // BrowserAuthError keeps the real Playwright/network failure in `cause`,
+    // and that is usually the actionable part. Without this the CLI only ever
+    // shows "Authentication failed" and the tips below blame the wrong thing.
+    let cause = error instanceof Error ? (error.cause as Error | undefined) : undefined;
+    const seen = new Set<Error>();
+    while (cause && !seen.has(cause)) {
+      seen.add(cause);
+      console.error("Caused by:", String(cause.message).split("\n")[0]);
+      cause = cause.cause as Error | undefined;
+    }
+
     console.error("\nTroubleshooting tips:");
     console.error("1. Ensure D2L_USERNAME and D2L_PASSWORD are set correctly in .env");
     console.error("2. If MFA approval failed, make sure you approved the Duo push on your phone");

@@ -311,6 +311,17 @@ export class BrowserAuth {
       if (BrowserAuth.isWSLOrDocker() && (errMsg.includes("spawn") || errMsg.includes("ENOENT") || errMsg.includes("sandbox"))) {
         hint = " (WSL/Docker hint: ensure Chromium dependencies are installed. Run: npx playwright install-deps chromium)";
       }
+      // Playwright's browser binary is missing for the revision this copy pins.
+      // Usually another project ran `npx playwright install` with a newer
+      // Playwright, which prunes revisions it doesn't recognise. Checked last so
+      // it wins over the platform hints — it names the actual fix.
+      if (
+        errMsg.includes("Executable doesn't exist") ||
+        errMsg.includes("playwright install") ||
+        errMsg.includes("dlopen")
+      ) {
+        hint = " (Chromium is not installed for this copy of Playwright. Run: npx playwright install chromium)";
+      }
 
       throw new BrowserAuthError(
         `Authentication failed${hint}`,
@@ -838,6 +849,24 @@ export class BrowserAuth {
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       const isTimeout = errMsg.includes("Timeout") || errMsg.includes("timeout") || errMsg.includes("hung");
+
+      // A missing or half-extracted Playwright download surfaces on macOS as a
+      // launch crash ("browser has been closed", from a failed dlopen), which is
+      // indistinguishable from a corrupted profile by the checks below.
+      // Quarantining cannot fix a broken binary and throws away the user's saved
+      // login profile, so fail fast with the real cause instead.
+      const isBrokenBrowserBinary =
+        errMsg.includes("dlopen") ||
+        errMsg.includes("Executable doesn't exist") ||
+        errMsg.includes("playwright install");
+
+      if (isBrokenBrowserBinary) {
+        log(
+          "ERROR",
+          "Playwright's Chromium is missing or incompletely downloaded — leaving the browser profile alone. Run: npx playwright install chromium"
+        );
+        throw error;
+      }
 
       // macOS: Chrome for Testing died during launch with SIGTRAP / browser
       // closed. The profile is likely corrupted from prior crashes. Quarantine
