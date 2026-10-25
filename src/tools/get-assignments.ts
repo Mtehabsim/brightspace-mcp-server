@@ -50,6 +50,15 @@ interface DropboxSubmission {
   Files: Array<{ FileId: number; FileName: string; Size: number }>;
 }
 
+/** What mysubmissions actually returns: one block per entity (user or group). */
+interface EntityDropbox {
+  Entity: { DisplayName: string; EntityId: number; EntityType: string } | null;
+  Status: number | null;
+  Feedback: DropboxFeedback | null;
+  Submissions: DropboxSubmission[];
+  CompletionDate: string | null;
+}
+
 interface DropboxFeedback {
   Score: number | null;
   Feedback: { Text: string; Html: string } | null;
@@ -136,14 +145,43 @@ export async function fetchCourseAssignments(
       // Skip hidden folders
       if (folder.IsHidden) continue;
 
-      // Fetch submissions for this folder
+      // Fetch submissions for this folder.
+      //
+      // mysubmissions returns EntityDropbox blocks, not bare submissions:
+      //   { Entity, Status, Feedback, Submissions: [...], CompletionDate }
+      // Treating a block as a submission makes SubmissionDate/Files/Comment all
+      // undefined, which silently reported every submitted assignment as having
+      // no files and no submission date. Unwrap Submissions, and keep the flat
+      // shape working in case an instance returns one.
       let submissions: DropboxSubmission[] = [];
+      let entityFeedback: DropboxFeedback | null = null;
       try {
-        const submissionsRaw = await apiClient.get<{ Objects: DropboxSubmission[] } | DropboxSubmission[]>(
+        const submissionsRaw = await apiClient.get<{ Objects: EntityDropbox[] } | EntityDropbox[]>(
           apiClient.le(courseId, `/dropbox/folders/${folder.Id}/submissions/mysubmissions/`),
           { ttl: DEFAULT_CACHE_TTLS.assignments }
         );
-        submissions = Array.isArray(submissionsRaw) ? submissionsRaw : (submissionsRaw as any).Objects ?? [];
+        const entries: EntityDropbox[] = Array.isArray(submissionsRaw)
+          ? submissionsRaw
+          : (submissionsRaw as any).Objects ?? [];
+        for (const entry of entries) {
+          if (!entry) continue;
+          if (Array.isArray(entry.Submissions)) {
+            submissions.push(...entry.Submissions);
+            // Feedback ships inline on the same block; the standalone
+            // feedback endpoint 404s on some Brightspace instances.
+            if (!entityFeedback && entry.Feedback) {
+              entityFeedback = entry.Feedback;
+            }
+          } else {
+            submissions.push(entry as unknown as DropboxSubmission);
+          }
+        }
+        // Newest first, so submissions[0] is the latest attempt rather than
+        // whatever order the API happened to return.
+        submissions.sort(
+          (a, b) =>
+            new Date(b.SubmissionDate ?? 0).getTime() - new Date(a.SubmissionDate ?? 0).getTime()
+        );
       } catch (error: any) {
         // 404 means no submissions yet - that's fine
         if (error?.status !== 404) {
@@ -151,17 +189,19 @@ export async function fetchCourseAssignments(
         }
       }
 
-      // Fetch feedback independently of submissions
-      let feedback: DropboxFeedback | null = null;
-      try {
-        feedback = await apiClient.get<DropboxFeedback>(
-          apiClient.le(courseId, `/dropbox/folders/${folder.Id}/feedback/myFeedback/`),
-          { ttl: DEFAULT_CACHE_TTLS.assignments }
-        );
-      } catch (error: any) {
-        // 404/403 means no feedback available (or no access) - that's fine
-        if (error?.status !== 404 && error?.status !== 403) {
-          log("DEBUG", `Failed to fetch feedback for folder ${folder.Id}`, error);
+      // Prefer the inline feedback; fall back to the standalone endpoint.
+      let feedback: DropboxFeedback | null = entityFeedback;
+      if (!feedback) {
+        try {
+          feedback = await apiClient.get<DropboxFeedback>(
+            apiClient.le(courseId, `/dropbox/folders/${folder.Id}/feedback/myFeedback/`),
+            { ttl: DEFAULT_CACHE_TTLS.assignments }
+          );
+        } catch (error: any) {
+          // 404/403 means no feedback available (or no access) - that's fine
+          if (error?.status !== 404 && error?.status !== 403) {
+            log("DEBUG", `Failed to fetch feedback for folder ${folder.Id}`, error);
+          }
         }
       }
 
@@ -203,7 +243,7 @@ export async function fetchCourseAssignments(
               score: feedback.Score,
               feedback: feedback.Feedback?.Html
                 ? convertHtmlToMarkdown(feedback.Feedback.Html)
-                : null,
+                : feedback.Feedback?.Text ?? null,
             }
           : null,
       };

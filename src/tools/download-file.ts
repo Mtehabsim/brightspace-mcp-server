@@ -240,22 +240,54 @@ async function downloadSubmissionFile(
     }>;
   }
 
-  const submissions =
-    await apiClient.get<DropboxSubmission[]>(submissionsPath);
+  /**
+   * mysubmissions returns one EntityDropbox block per entity, with the actual
+   * attempts nested under Submissions. Indexing the block as a submission left
+   * Files undefined, so every submission-file download threw a TypeError.
+   */
+  interface EntityDropbox {
+    Submissions?: DropboxSubmission[];
+  }
 
-  if (!submissions || submissions.length === 0) {
+  const submissionsRaw =
+    await apiClient.get<EntityDropbox[] | DropboxSubmission[]>(submissionsPath);
+
+  const entries: any[] = Array.isArray(submissionsRaw)
+    ? submissionsRaw
+    : (submissionsRaw as any)?.Objects ?? [];
+
+  const submissions: DropboxSubmission[] = [];
+  for (const entry of entries) {
+    if (!entry) continue;
+    if (Array.isArray(entry.Submissions)) {
+      submissions.push(...entry.Submissions);
+    } else {
+      submissions.push(entry as DropboxSubmission);
+    }
+  }
+
+  if (submissions.length === 0) {
     return errorResponse(
       "No submissions found for this assignment. Upload a submission first."
     );
   }
 
-  // Find the file in the submission
-  const submission = submissions[0];
-  const file = submission.Files.find((f) => f.FileId === fileId);
+  // The file may belong to any attempt, so search them all.
+  let submission: DropboxSubmission | undefined;
+  let file: { FileId: number; FileName: string; Size: number } | undefined;
+  for (const candidate of submissions) {
+    const match = candidate.Files?.find((f) => f.FileId === fileId);
+    if (match) {
+      submission = candidate;
+      file = match;
+      break;
+    }
+  }
 
-  if (!file) {
+  if (!file || !submission) {
+    const available = submissions.flatMap((c) => c.Files ?? []);
     return errorResponse(
-      `File ID ${fileId} not found in submission. Available files: ${submission.Files.map((f) => `${f.FileName} (ID: ${f.FileId})`).join(", ")}`
+      `File ID ${fileId} not found in submission. Available files: ${available.map((f) => `${f.FileName} (ID: ${f.FileId})`).join(", ")}`
     );
   }
 
