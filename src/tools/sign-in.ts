@@ -9,6 +9,7 @@ import type { AppConfig } from "../types/index.js";
 import type { TokenManager } from "../auth/token-manager.js";
 import { AuthProcessError, type AuthFailureKind, type AuthRunner } from "../auth/auth-runner.js";
 import { log } from "../utils/logger.js";
+import { createSSOFlow } from "../auth/sso-flow.js";
 import { SignInSchema } from "./schemas.js";
 import { authPendingNotice, sanitizeError, textResponse as text } from "./tool-helpers.js";
 import { AUTH_COMMAND, SETUP_COMMAND } from "../utils/commands.js";
@@ -52,8 +53,9 @@ const STILL_WORKING: ReadonlySet<AuthFailureKind> = new Set<AuthFailureKind>([
  * What is specific to this tool is the decision to sign in at all, and the
  * window: the saved session is read first (TokenManager), so calling this
  * speculatively costs the user no MFA approval, and `visible`, left out,
- * opens a window exactly when no password is saved, which is when a headless
- * sign-in has nothing to type into the school's form and can only time out.
+ * opens a window exactly when the school's sign-in flow has nothing to sign
+ * in with (no username, or no password and not passwordless), which is when a
+ * headless sign-in can only time out.
  * A window cannot be asked of a sign-in already running, which keeps its own
  * mode, so busy() is checked before one is promised.
  *
@@ -94,15 +96,18 @@ export function registerSignIn(
         log("DEBUG", "sign_in could not read the saved session; signing in", error);
       }
 
-      const hasPassword = config.password !== undefined;
+      // The same test the sign-in itself makes before typing anything: each
+      // school's flow decides. A passwordless account keeps no password yet
+      // signs in without a window (the phone approves it).
+      const canSignInHeadless = createSSOFlow(config).hasCredentials();
       // A window only when a headless sign-in could not work anyway.
-      const wantWindow = visible ?? !hasPassword;
+      const wantWindow = visible ?? !canSignInHeadless;
       // A joined sign-in keeps the mode it started with, so asking would only
       // promise the user a window that never appears.
       const windowOpened = wantWindow && !authRunner.busy();
       if (windowOpened) authRunner.requestVisibleBrowser();
       else if (wantWindow) log("INFO", "sign_in was asked for a window but a sign-in is already running");
-      if (!wantWindow && !hasPassword) return text(NEEDS_PASSWORD_FOR_HEADLESS, true);
+      if (!wantWindow && !canSignInHeadless) return text(NEEDS_PASSWORD_FOR_HEADLESS, true);
 
       try {
         await authRunner.run();

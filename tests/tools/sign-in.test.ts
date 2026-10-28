@@ -138,6 +138,30 @@ describe("sign_in window decision", () => {
     expect(text).toMatch(/visible true/i);
   });
 
+  // Purdue's passwordless mode keeps no password but signs in without a
+  // window (the user approves on their phone), so it must not be treated as
+  // having nothing to sign in with.
+  const purduePasswordless = () =>
+    config({ baseUrl: "https://purdue.brightspace.com", password: undefined, passwordless: true });
+
+  it("stays in the background for a passwordless account", async () => {
+    await signIn(purduePasswordless());
+    expect(requestVisibleBrowser).not.toHaveBeenCalled();
+    expect(run).toHaveBeenCalledOnce();
+  });
+
+  it("signs a passwordless account in with visible false instead of refusing", async () => {
+    const { isError, text } = await signIn(purduePasswordless(), { visible: false });
+    expect(run).toHaveBeenCalledOnce();
+    expect(isError).toBe(false);
+    expect(text).not.toMatch(/no password is saved/i);
+  });
+
+  it("opens one when a password is saved but no username is, which a windowless sign-in cannot use", async () => {
+    await signIn(config({ username: undefined }));
+    expect(requestVisibleBrowser).toHaveBeenCalledOnce();
+  });
+
   it("promises no window it cannot deliver when a sign-in is already running", async () => {
     busy.mockReturnValue(true);
     const { text } = await signIn(config(), { visible: true }, fail("inProgress"));
