@@ -71,6 +71,14 @@ npx -y brightspace-mcp-server@latest auth
 
 Run it from your home folder — macOS blocks `npx` from Documents, Desktop, or Downloads without Files and Folders permission (`EPERM`). Grant access in System Settings → Privacy & Security → Files and Folders, or run elsewhere.
 
+A sign-in that hangs and then times out usually has nothing to type: headless mode fills the school's form from a saved password, so with none saved it waits on a page it cannot answer. To sign in by hand instead, open the window:
+
+```bash
+npx -y brightspace-mcp-server@latest auth --browser
+```
+
+`--headed` is the same flag, and `D2L_HEADLESS=false` is the same thing set in the environment. It applies to that one run and saves no preference; `setup` is where the stored hidden-or-visible default is chosen. `auth --help` lists the flags without starting a sign-in.
+
 ## Signing out early
 
 To end the saved session before it lapses (on a shared computer, say) or to force a fresh sign-in, run:

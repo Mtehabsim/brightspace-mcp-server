@@ -38,7 +38,32 @@ async function requestMfaCode(): Promise<string> {
   }
 }
 
+const USAGE = `
+Brightspace authentication
+
+Usage: brightspace-auth [options]
+
+Options:
+  --browser, --headed  Open a visible browser window and sign in by hand. Use
+                       this the first time, or whenever no password is saved:
+                       a headless sign-in has nothing to type into the school's
+                       form, so it waits and then times out.
+  --automatic          Machine-readable markers for the MCP server. Not meant
+                       for interactive use.
+  --logout             Delete this machine's saved session files.
+  --help, -h           Show this message.
+
+Environment:
+  D2L_HEADLESS=false   Same effect as --browser.
+`;
+
 async function main(): Promise<void> {
+  // Answered before anything else so --help never starts a real sign-in.
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    console.error(USAGE.trim());
+    return;
+  }
+
   // Local and offline: no banner, no update check, no hand-off to a newer
   // release. It only deletes this machine's saved session files.
   if (process.argv.includes("--logout")) {
@@ -47,6 +72,13 @@ async function main(): Promise<void> {
   }
 
   const automatic = process.argv.includes("--automatic");
+  // A headless sign-in only works when a password is saved. With nothing to
+  // type into the school's form it waits, times out, and reports a failure
+  // that reads like a network problem. Opening a window lets the person sign
+  // in by hand. D2L_HEADLESS=0 already did this, but nothing in the CLI said
+  // so, which is where first-time users and automated callers get stuck.
+  const forceBrowser =
+    process.argv.includes("--browser") || process.argv.includes("--headed");
 
   // If this copy is stale, hand off to the current release instead of running
   // our own out-of-date sign-in code. No prompt, no user action.
@@ -64,6 +96,7 @@ async function main(): Promise<void> {
 
   try {
     const config = await loadConfig();
+    if (forceBrowser) config.headless = false;
     // The sign-in itself runs here, not in the server, so the dev activity log
     // only sees its MFA events if this process is configured for them too.
     configureDevActivity(config.sessionDir, { version: pkg.version, role: "auth" });

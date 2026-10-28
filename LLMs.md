@@ -133,7 +133,7 @@ code is ever logged. Security: the seed beside the password collapses two factor
 machine — it still defeats a remote attacker holding only the password, and defends against nothing
 running as that user, which is why it ships off by default.
 
-Visible mode applies to the manual `auth` command, whose window remains open for up to five minutes when automatic credential handling is unavailable or the identity provider needs direct interaction. Automatic recovery spawned by `AuthRunner` runs headless unless `D2L_HEADLESS` is set explicitly. Rerunning setup preserves the existing hidden or visible preference as the default choice.
+Visible mode applies to the manual `auth` command, which takes `--browser` (or `--headed`) to force it for a single run; `--help` prints the flags and exits without signing in. Its window remains open for up to five minutes when automatic credential handling is unavailable or the identity provider needs direct interaction. Automatic recovery spawned by `AuthRunner` runs headless unless `D2L_HEADLESS` is set explicitly. Rerunning setup preserves the existing hidden or visible preference as the default choice.
 
 ```bash
 npx -y brightspace-mcp-server@latest auth
@@ -381,7 +381,7 @@ Every setting the server reads from the environment. All are optional; `setup` w
 | `D2L_PASSWORD` | none | Sign-in password. Copied into the OS credential store for the account on startup, never to a file. Ignored when passwordless sign-in is on |
 | `D2L_SESSION_DIR` | `~/.d2l-session` | Root of the per-account session directories. `~` is expanded |
 | `D2L_TOKEN_TTL` | `3600` | Seconds an access token is used before it is re-minted. Must be a whole positive number; anything else is ignored with a warning |
-| `D2L_HEADLESS` | `true` | `false` shows the browser during sign-in, for MFA methods that need a click. Automatic recovery stays headless unless this is set explicitly |
+| `D2L_HEADLESS` | `true` | `false` shows the browser during sign-in, for MFA methods that need a click; `auth --browser` does the same for one run. Automatic recovery stays headless unless this is set explicitly |
 | `D2L_REMEMBER_MFA` | `false` | Tick Microsoft Entra's "Don't ask again" box (see [Re-auth](#re-auth)) |
 | `D2L_PASSWORDLESS` | `false` | Microsoft Entra passwordless phone approval; no password is read or saved (see [Re-auth](#re-auth)) |
 | `D2L_TOTP_SECRET` | none | Authenticator setup key or `otpauth://` link for Entra code challenges. For CI and containers only; weaker than the keychain entry `setup` saves |

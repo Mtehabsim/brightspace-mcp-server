@@ -100,7 +100,7 @@ All optional, set in your AI app's MCP `env` config or your shell. The full list
 |---------|--------------|
 | `D2L_REMEMBER_MFA=true` | Tick Microsoft's "Don't ask again" box so later sign-ins skip the second factor (off by default; not for shared computers). `setup` asks this as option 2 of its one "how often do you want to approve sign-ins" question and saves it as `rememberMfa` in `config.json`; the env var overrides it ([details](docs/sign-in.md#fewer-2fa-prompts)) |
 | `D2L_TOTP_SECRET` | An authenticator setup key, so a Microsoft Entra "enter a code" challenge is answered on this computer instead of on your phone (off by default). Prefer `setup` (option 3), which keeps the key in your OS keychain; this variable is for CI and containers with no keychain and is weaker, because anything that can read the process environment gets your second factor ([details](docs/sign-in.md#fewer-2fa-prompts)) |
-| `D2L_HEADLESS=false` | Show the browser window during sign-in, for MFA methods that need a click |
+| `D2L_HEADLESS=false` | Show the browser window during sign-in, for MFA methods that need a click. `auth --browser` does the same for one run, without setting anything |
 | `D2L_DUO_PASSCODE=1` | On Duo, type a passcode instead of waiting for a push |
 | `D2L_SESSION_COOKIE` / `D2L_ACCESS_TOKEN` | Skip the browser entirely with a pasted cookie or token ([how](docs/sign-in.md#no-browser-paste-a-session-cookie-or-token)) |
 | `D2L_INCLUDE_COURSES` / `D2L_EXCLUDE_COURSES` | Limit which courses the AI sees, by course id |
