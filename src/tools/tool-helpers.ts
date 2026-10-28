@@ -45,6 +45,16 @@ export function withUpdateNotice(content: CallToolResult["content"]): CallToolRe
  * notice is appended as a separate content block so content[0].text stays a
  * pure JSON document for anything parsing it.
  */
+/**
+ * A plain-text answer, as the sign-in tools give: prose a model relays to the
+ * user, not a JSON envelope to read fields out of. Carries the update notice
+ * like every other response.
+ */
+export function textResponse(message: string, isError = false): CallToolResult {
+  const result = withUpdateNotice([{ type: "text", text: message }]);
+  return isError ? { ...result, isError: true } : result;
+}
+
 export function toolResponse(data: unknown): CallToolResult {
   return withUpdateNotice([
     {
